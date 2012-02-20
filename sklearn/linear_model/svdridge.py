@@ -279,24 +279,23 @@ def find_new_intervals(current_grid, best_score_indices):
         lower_uncritical.nonzero()]
 
     lower_bounds[lower_critical] =\
-        current_grid[
-            best_score_indices[lower_critical],
-            lower_critical.nonzero()] ** 2 /\
-        current_grid[
-            best_score_indices[lower_critical] + 1,
-            lower_critical.nonzero()]
+        current_grid[0, lower_critical] ** 2 /\
+        current_grid[-1, lower_critical]
 
     upper_bounds[upper_uncritical] = current_grid[
         best_score_indices[upper_uncritical] + 1,
         upper_uncritical.nonzero()]
 
     upper_bounds[upper_critical] =\
-        current_grid[
-            best_score_indices[upper_critical],
-            upper_critical.nonzero()] ** 2 /\
-        current_grid[
-            best_score_indices[upper_critical] - 1,
-            upper_critical.nonzero()]
+        current_grid[-1, upper_critical] ** 2 /\
+        current_grid[0, upper_critical]
+
+    upper_bounds[lower_critical] = np.sqrt(current_grid[0, lower_critical] *
+                                           current_grid[-1, lower_critical])
+
+    lower_bounds[upper_critical] = np.sqrt(current_grid[0, upper_critical] *
+                                           current_grid[-1, upper_critical])
+
 
     if VERBOSE > 0:
         if lower_critical.any():
