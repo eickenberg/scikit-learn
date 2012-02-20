@@ -4,7 +4,6 @@ from sklearn.utils import safe_asarray as safe_asarray
 from scipy.optimize import nnls
 import scipy.sparse as sp
 from scipy import linalg
-from laplacian_util import laplacian_operator
 
 
 VERBOSE = 1
