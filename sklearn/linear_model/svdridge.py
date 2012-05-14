@@ -4,7 +4,7 @@ from sklearn.utils import safe_asarray as safe_asarray
 from scipy.optimize import nnls
 import scipy.sparse as sp
 from scipy import linalg
-
+from sklearn.externals.joblib import Memory
 
 VERBOSE = 1
 
@@ -82,14 +82,14 @@ class SVDRidge(LinearModel):
         return self
 
 
-def crazy_svd_ridge_regression(X, y, alphas):
+def crazy_svd_ridge_regression(X, y, alphas, svd=linalg.svd):
     """does svd ridge with several alphas per y"""
     if VERBOSE > 0:
         print "Starting multiple alpha ridge regression with alphas %s"\
             % str(alphas)
 
     t0 = time.time()
-    U, s, V = linalg.svd(X, full_matrices=False)
+    U, s, V = svd(X, full_matrices=False)
 
     t = time.time()
     if VERBOSE:
@@ -167,11 +167,15 @@ class cSVDRidge(LinearModel):
     for each y"""
 
     def __init__(self, alpha=1.,
-                 fit_intercept=True, normalize=False, copy_X=True):
+                 fit_intercept=True, normalize=False, copy_X=True,
+                 mem=Memory(cachedir=None)):
         self.alpha = alpha
         self.fit_intercept = fit_intercept
         self.normalize = normalize
         self.copy_X = copy_X
+        self.mem = mem
+
+        self.svd = mem.cache(linalg.svd)
 
     # def _get_params(self, *args, **kwargs):
     #     """Gives back the important parameters to build this estimator"""
@@ -206,7 +210,7 @@ know what to do")
             else:
                 alphas = self.alpha
 
-        self.coef_ = crazy_svd_ridge_regression(X, y, alphas)
+        self.coef_ = crazy_svd_ridge_regression(X, y, alphas, svd=self.svd)
         # TODO : SET INTERCEPT is missing!
         return self
 
@@ -359,15 +363,21 @@ class SVDRidgeCV(LinearModel):
                  alpha_max=1e7,
                  num_grid_points=5,
                  num_refinements=5,
-                 cv=5):
+                 cv=5,
+                 mem=Memory(cachedir=None),
+                 keep_scores=True,
+                 keep_best_estimators=False):
         self.alpha_min = alpha_min
         self.alpha_max = alpha_max
         self.num_grid_points = num_grid_points
         self.num_refinements = num_refinements
         self.cv = cv
+        self.mem = mem
+        self.keep_scores = keep_scores
+        self.keep_best_estimators = keep_best_estimators
 
     def _get_scores(self, X, y, alphas, cv):
-        clf = cSVDRidge(alphas)
+        clf = cSVDRidge(alphas, mem=self.mem)
         scores = do_cross_val(clf, X, y, cv, keep_estimators=False)
         return scores
 
@@ -378,9 +388,13 @@ class SVDRidgeCV(LinearModel):
 
         return mean_scores.argmax(0)
 
-    def fit(self, X, y, keep_best_estimators=False, keep_scores=True):
+    def fit(self, X, y):
         """Fits ridge estimators using a grid refinement scheme for the
         penalties"""
+
+        keep_best_estimators = self.keep_best_estimators
+        keep_scores = self.keep_scores
+
         t_fit0 = time.time()
         if VERBOSE > 0:
             print "Fitting SVDRidgeCV to data of shape X=%s, y=%s" %\
@@ -439,7 +453,7 @@ class SVDRidgeCV(LinearModel):
                                self.num_grid_points, False, False)
 
         # Here goes the last one, potentially keeping the estimators
-        clf = cSVDRidge(grids)
+        clf = cSVDRidge(grids, mem=self.mem)
         if VERBOSE > 0:
             print "Effectuating cross_val grid refinement %d" %\
                 (self.num_refinements - 1)
@@ -455,15 +469,15 @@ class SVDRidgeCV(LinearModel):
             scores = res
             self.estimators = None
 
-        best_params_arg = scores.mean(0).argmax(0)
-        self.best_params = grids[best_params_arg,
+        self.best_params_arg = scores.mean(0).argmax(0)
+        self.best_params = grids[self.best_params_arg,
                             np.arange(y.shape[1])].reshape(1, -1)
 
         if keep_scores:
             self.all_grids[-grids.shape[0]:, :] = grids
             self.all_scores[:, -grids.shape[0]:, :] = scores
 
-        clf = cSVDRidge(self.best_params)
+        clf = cSVDRidge(self.best_params, mem=self.mem)
         clf.fit(X, y)
 
         self.clf = clf
