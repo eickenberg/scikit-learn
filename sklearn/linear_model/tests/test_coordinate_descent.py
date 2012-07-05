@@ -12,6 +12,8 @@ from numpy.testing import assert_array_almost_equal, assert_almost_equal, \
 from nose import SkipTest
 from nose.tools import assert_true
 
+from sklearn.utils.testing import assert_greater
+
 from sklearn.linear_model.coordinate_descent import Lasso, \
     LassoCV, ElasticNet, ElasticNetCV
 from sklearn.linear_model import LassoLarsCV
@@ -167,10 +169,8 @@ def test_lasso_path():
                             clf.mse_path_[5].mean(),
                             significant=2)
 
-
-
     # test set
-    assert_true(clf.score(X_test, y_test) > 0.99)
+    assert_greater(clf.score(X_test, y_test), 0.99)
 
 
 def test_enet_path():
@@ -181,20 +181,20 @@ def test_enet_path():
         # Here we have a small number of iterations, and thus the
         # ElasticNet might not converge. This is to speed up tests
         warnings.simplefilter("ignore", UserWarning)
-        clf = ElasticNetCV(n_alphas=5, eps=2e-3, rho=[0.9, 0.95,], cv=3,
+        clf = ElasticNetCV(n_alphas=5, eps=2e-3, rho=[0.9, 0.95], cv=3,
                            max_iter=max_iter)
         clf.fit(X, y)
         assert_almost_equal(clf.alpha, 0.002, 2)
         assert_equal(clf.rho_, 0.95)
 
-        clf = ElasticNetCV(n_alphas=5, eps=2e-3, rho=[0.9, 0.95,], cv=3,
+        clf = ElasticNetCV(n_alphas=5, eps=2e-3, rho=[0.9, 0.95], cv=3,
                            max_iter=max_iter, precompute=True)
         clf.fit(X, y)
     assert_almost_equal(clf.alpha, 0.002, 2)
     assert_equal(clf.rho_, 0.95)
 
     # test set
-    assert_true(clf.score(X_test, y_test) > 0.99)
+    assert_greater(clf.score(X_test, y_test), 0.99)
 
 
 def test_path_parameters():
@@ -240,8 +240,33 @@ def test_lasso_alpha_warning():
         clf = Lasso(alpha=0)
         clf.fit(X, Y)
 
-        assert_true(len(w) > 0)  # warnings should be raised
+        assert_greater(len(w), 0)  # warnings should be raised
 
+
+def test_lasso_positive_constraint():
+    X = [[-1], [0], [1]]
+    y = [1, 0, -1]       # just a straight line with negative slope
+
+    lasso = Lasso(alpha=0.1, max_iter=1000, positive=True)
+    lasso.fit(X, y)
+    assert_true(min(lasso.coef_) >= 0)
+
+    lasso = Lasso(alpha=0.1, max_iter=1000, precompute=True, positive=True)
+    lasso.fit(X, y)
+    assert_true(min(lasso.coef_) >= 0)
+
+
+def test_enet_positive_constraint():
+    X = [[-1], [0], [1]]
+    y = [1, 0, -1]       # just a straight line with negative slope
+
+    enet = ElasticNet(alpha=0.1, max_iter=1000, positive=True)
+    enet.fit(X, y)
+    assert_true(min(enet.coef_) >= 0)
+
+    enet = ElasticNet(alpha=0.1, max_iter=1000, precompute=True, positive=True)
+    enet.fit(X, y)
+    assert_true(min(enet.coef_) >= 0)
 
 if __name__ == '__main__':
     import nose

@@ -22,6 +22,7 @@ improves.
 import numpy as np
 
 from .base import BaseEstimator, ClassifierMixin, clone, is_classifier
+from .base import MetaEstimatorMixin
 from .preprocessing import LabelBinarizer
 from .metrics.pairwise import euclidean_distances
 from .utils import check_random_state
@@ -70,7 +71,7 @@ def predict_ovr(estimators, label_binarizer, X):
     return label_binarizer.inverse_transform(Y.T, threshold=thresh)
 
 
-class OneVsRestClassifier(BaseEstimator, ClassifierMixin):
+class OneVsRestClassifier(BaseEstimator, ClassifierMixin, MetaEstimatorMixin):
     """One-vs-the-rest (OvR) multiclass/multilabel strategy
 
     Also known as one-vs-all, this strategy consists in fitting one classifier
@@ -216,7 +217,7 @@ def predict_ovo(estimators, classes, X):
     return classes[votes.argmax(axis=1)]
 
 
-class OneVsOneClassifier(BaseEstimator, ClassifierMixin):
+class OneVsOneClassifier(BaseEstimator, ClassifierMixin, MetaEstimatorMixin):
     """One-vs-one multiclass strategy
 
     This strategy consists in fitting one classifier per class pair.
@@ -346,7 +347,7 @@ def predict_ecoc(estimators, classes, code_book, X):
     return classes[pred]
 
 
-class OutputCodeClassifier(BaseEstimator, ClassifierMixin):
+class OutputCodeClassifier(BaseEstimator, ClassifierMixin, MetaEstimatorMixin):
     """(Error-Correcting) Output-Code multiclass strategy
 
     Output-code based strategies consist in representing each class with a
@@ -385,24 +386,23 @@ class OutputCodeClassifier(BaseEstimator, ClassifierMixin):
     `code_book_` : numpy array of shape [n_classes, code_size]
         Binary array containing the code of each class.
 
-    Notes
-    -----
-    **References**:
+    References
+    ----------
 
-     * [1] "Solving multiclass learning problems via error-correcting ouput
-        codes",
-        Dietterich T., Bakiri G.,
-        Journal of Artificial Intelligence Research 2,
-        1995.
+    .. [1] "Solving multiclass learning problems via error-correcting output
+       codes",
+       Dietterich T., Bakiri G.,
+       Journal of Artificial Intelligence Research 2,
+       1995.
 
-     * [2] "The error coding method and PICTs",
-        James G., Hastie T.,
-        Journal of Computational and Graphical statistics 7,
-        1998.
+    .. [2] "The error coding method and PICTs",
+       James G., Hastie T.,
+       Journal of Computational and Graphical statistics 7,
+       1998.
 
-     * [3] "The Elements of Statistical Learning",
-        Hastie T., Tibshirani R., Friedman J., page 606 (second-edition)
-        2008.
+    .. [3] "The Elements of Statistical Learning",
+       Hastie T., Tibshirani R., Friedman J., page 606 (second-edition)
+       2008.
     """
 
     def __init__(self, estimator, code_size=1.5, random_state=None):

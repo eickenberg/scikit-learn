@@ -102,8 +102,23 @@ def spectral_embedding(adjacency, n_components=8, mode=None,
                 # csr has the fastest matvec and is thus best suited to
                 # arpack
                 laplacian = laplacian.tocsr()
+
+        # Here we'll use shift-invert mode for fast eigenvalues
+        # (see http://docs.scipy.org/doc/scipy/reference/tutorial/arpack.html
+        #  for a short explanation of what this means)
+        # Because the normalized Laplacian has eigenvalues between 0 and 2,
+        # I - L has eigenvalues between -1 and 1.  ARPACK is most efficient
+        # when finding eigenvalues of largest magnitude (keyword which='LM')
+        # and when these eigenvalues are very large compared to the rest.
+        # For very large, very sparse graphs, I - L can have many, many
+        # eigenvalues very near 1.0.  This leads to slow convergence.  So
+        # instead, we'll use ARPACK's shift-invert mode, asking for the
+        # eigenvalues near 1.0.  This effectively spreads-out the spectrum
+        # near 1.0 and leads to much faster convergence: potentially an
+        # orders-of-magnitude speedup over simply using keyword which='LA'
+        # in standard mode.
         lambdas, diffusion_map = eigsh(-laplacian, k=n_components,
-                                        which='LA')
+                                       sigma=1.0, which='LM')
         embedding = diffusion_map.T[::-1] * dd
     elif mode == 'amg':
         # Use AMG to get a preconditioner and speed up the eigenvalue
@@ -124,8 +139,8 @@ def spectral_embedding(adjacency, n_components=8, mode=None,
     return embedding
 
 
-def spectral_clustering(affinity, k=8, n_components=None, mode=None,
-                        random_state=None, n_init=10):
+def spectral_clustering(affinity, n_clusters=8, n_components=None, mode=None,
+                        random_state=None, n_init=10, k=None):
     """Apply k-means to a projection to the normalized laplacian
 
     In practice Spectral Clustering is very useful when the structure of
@@ -148,7 +163,7 @@ def spectral_clustering(affinity, k=8, n_components=None, mode=None,
           - heat kernel of the pairwise distance matrix of the samples,
           - symmetic k-nearest neighbours connectivity matrix of the samples.
 
-    k: integer, optional
+    n_clusters: integer, optional
         Number of clusters to extract.
 
     n_components: integer, optional, default is k
@@ -177,9 +192,8 @@ def spectral_clustering(affinity, k=8, n_components=None, mode=None,
     centers: array of integers, shape: k
         The indices of the cluster centers
 
-    Notes
-    -----
-    **References**:
+    References
+    ----------
 
     - Normalized cuts and image segmentation, 2000
       Jianbo Shi, Jitendra Malik
@@ -197,12 +211,15 @@ def spectral_clustering(affinity, k=8, n_components=None, mode=None,
     This algorithm solves the normalized cut for k=2: it is a
     normalized spectral clustering.
     """
+    if not k is None:
+        warnings.warn("'k' was renamed to n_clusters", DeprecationWarning)
+        n_clusters = k
     random_state = check_random_state(random_state)
-    n_components = k if n_components is None else n_components
+    n_components = n_clusters if n_components is None else n_components
     maps = spectral_embedding(affinity, n_components=n_components,
                               mode=mode, random_state=random_state)
     maps = maps[1:]
-    _, labels, _ = k_means(maps.T, k, random_state=random_state,
+    _, labels, _ = k_means(maps.T, n_clusters, random_state=random_state,
                     n_init=n_init)
     return labels
 
@@ -221,20 +238,20 @@ class SpectralClustering(BaseEstimator):
 
     Parameters
     -----------
-    k: integer, optional
+    n_clusters : integer, optional
         The dimension of the projection subspace.
 
-    mode: {None, 'arpack' or 'amg'}
+    mode : {None, 'arpack' or 'amg'}
         The eigenvalue decomposition strategy to use. AMG requires pyamg
         to be installed. It can be faster on very large, sparse problems,
         but may also lead to instabilities
 
-    random_state: int seed, RandomState instance, or None (default)
+    random_state : int seed, RandomState instance, or None (default)
         A pseudo random number generator used for the initialization
         of the lobpcg eigen vectors decomposition when mode == 'amg'
         and by the K-Means initialization.
 
-    n_init: int, optional, default: 10
+    n_init : int, optional, default: 10
         Number of time the k-means algorithm will be run with different
         centroid seeds. The final results will be the best output of
         n_init consecutive runs in terms of inertia.
@@ -245,9 +262,8 @@ class SpectralClustering(BaseEstimator):
     `labels_` :
         Labels of each point
 
-    Notes
-    -----
-    **References**:
+    References
+    ----------
 
     - Normalized cuts and image segmentation, 2000
       Jianbo Shi, Jitendra Malik
@@ -258,8 +274,12 @@ class SpectralClustering(BaseEstimator):
       http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.165.9323
     """
 
-    def __init__(self, k=8, mode=None, random_state=None, n_init=10):
-        self.k = k
+    def __init__(self, n_clusters=8, mode=None, random_state=None, n_init=10,
+            k=None):
+        if not k is None:
+            warnings.warn("'k' was renamed to n_clusters", DeprecationWarning)
+            n_clusters = k
+        self.n_clusters = n_clusters
         self.mode = mode
         self.random_state = random_state
         self.n_init = n_init
@@ -293,7 +313,7 @@ class SpectralClustering(BaseEstimator):
         speeds up computation.
         """
         self.random_state = check_random_state(self.random_state)
-        self.labels_ = spectral_clustering(X, k=self.k, mode=self.mode,
-                                           random_state=self.random_state,
-                                           n_init=self.n_init)
+        self.labels_ = spectral_clustering(X, n_clusters=self.n_clusters,
+                mode=self.mode, random_state=self.random_state,
+                n_init=self.n_init)
         return self

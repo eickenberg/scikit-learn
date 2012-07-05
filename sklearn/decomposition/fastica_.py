@@ -8,11 +8,12 @@ Independent Component Analysis, by  Hyvarinen et al.
 # Author: Pierre Lafaye de Micheaux, Stefan van der Walt, Gael Varoquaux,
 #         Bertrand Thirion, Alexandre Gramfort
 # License: BSD 3 clause
+import warnings
 import numpy as np
 from scipy import linalg
 
 from ..base import BaseEstimator
-from ..utils import array2d, as_float_array, check_random_state
+from ..utils import array2d, as_float_array, check_random_state, deprecated
 
 __all__ = ['fastica', 'FastICA']
 
@@ -129,11 +130,11 @@ def fastica(X, n_components=None, algorithm="parallel", whiten=True,
     algorithm : {'parallel', 'deflation'}, optional
         Apply a parallel or deflational FASTICA algorithm.
     whiten: boolean, optional
-        If true perform an initial whitening of the data. Do not set to
-        false unless the data is already white, as you will get incorrect
-        results.
-        If whiten is true, the data is assumed to have already been
+        If True perform an initial whitening of the data.
+        If False, the data is assumed to have already been
         preprocessed: it should be centered, normed and white.
+        Otherwise you will get incorrect results.
+        In this case the parameter n_components will be ignored.
     fun : string or function, optional
         The functional form of the G function used in the
         approximation to neg-entropy. Could be either 'logcosh', 'exp',
@@ -247,6 +248,10 @@ def fastica(X, n_components=None, algorithm="parallel", whiten=True,
 
     n, p = X.shape
 
+    if whiten == False and n_components is not None:
+        n_components = None
+        warnings.warn('Ignoring n_components with whiten=False.')
+
     if n_components is None:
         n_components = min(n, p)
     if (n_components > min(n, p)):
@@ -329,8 +334,10 @@ class FastICA(BaseEstimator):
 
     Attributes
     ----------
-    `unmixing_matrix_` : 2D array, [n_components, n_samples]
+    `components_` : 2D array, [n_components, n_features]
         The unmixing matrix
+    `sources_`: 2D array, [n_samples, n_components]
+        The estimated latent sources of the data.
 
     Notes
     -----
@@ -364,10 +371,10 @@ class FastICA(BaseEstimator):
                         self.tol, self.w_init,
                         random_state=self.random_state)
         if self.whiten == True:
-            self.unmixing_matrix_ = np.dot(unmixing_, whitening_)
+            self.components_ = np.dot(unmixing_, whitening_)
         else:
-            self.unmixing_matrix_ = unmixing_
-        self.components_ = sources_
+            self.components_ = unmixing_
+        self.sources_ = sources_
         return self
 
     def transform(self, X):
@@ -375,9 +382,14 @@ class FastICA(BaseEstimator):
 
         S = X * W.T
         """
-        return np.dot(X, self.unmixing_matrix_.T)
+        return np.dot(X, self.components_.T)
 
     def get_mixing_matrix(self):
         """Compute the mixing matrix
         """
-        return linalg.pinv(self.unmixing_matrix_)
+        return linalg.pinv(self.components_)
+
+    @property
+    @deprecated("Renamed to ``components_``")
+    def unmixing_matrix_(self):
+        return self.components_

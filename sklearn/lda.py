@@ -17,11 +17,22 @@ class LDA(BaseEstimator, ClassifierMixin, TransformerMixin):
     """
     Linear Discriminant Analysis (LDA)
 
+    A classifier with a linear decision boundary, generated
+    by fitting class conditional densities to the data
+    and using Bayes' rule.
+
+    The model fits a Gaussian density to each class, assuming that
+    all classes share the same covariance matrix.
+
+    The fitted model can also be used to reduce the dimensionality
+    of the input, by projecting it to the most discriminative
+    directions.
+
     Parameters
     ----------
 
     n_components: int
-        Number of components (< n_classes - 1)
+        Number of components (< n_classes - 1) for dimensionality reduction
 
     priors : array, optional, shape = [n_classes]
         Priors on classes
@@ -46,12 +57,12 @@ class LDA(BaseEstimator, ClassifierMixin, TransformerMixin):
     >>> clf = LDA()
     >>> clf.fit(X, y)
     LDA(n_components=None, priors=None)
-    >>> print clf.predict([[-0.8, -1]])
+    >>> print(clf.predict([[-0.8, -1]]))
     [1]
 
     See also
     --------
-    QDA
+    sklearn.qda.QDA: Quadratic discriminant analysis
 
     """
 
@@ -135,11 +146,13 @@ class LDA(BaseEstimator, ClassifierMixin, TransformerMixin):
 
         # ----------------------------
         # 1) within (univariate) scaling by with classes std-dev
-        scaling = 1. / Xc.std(0)
+        std = Xc.std(axis=0)
+        # avoid division by zero in normalization
+        std[std == 0] = 1.
         fac = float(1) / (n_samples - n_classes)
         # ----------------------------
         # 2) Within variance scaling
-        X = np.sqrt(fac) * (Xc * scaling)
+        X = np.sqrt(fac) * (Xc / std)
         # SVD of centered (within)scaled data
         U, S, V = linalg.svd(X, full_matrices=0)
 
@@ -147,7 +160,7 @@ class LDA(BaseEstimator, ClassifierMixin, TransformerMixin):
         if rank < n_features:
             warnings.warn("Variables are collinear")
         # Scaling of within covariance is: V' 1/S
-        scaling = (scaling * V[:rank]).T / S[:rank]
+        scaling = (V[:rank] / std).T / S[:rank]
 
         ## ----------------------------
         ## 3) Between variance scaling
