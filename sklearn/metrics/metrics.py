@@ -16,6 +16,7 @@ the lower the better
 #          Lars Buitinck <L.J.Buitinck@uva.nl>
 #          Joel Nothman <joel.nothman@gmail.com>
 #          Manoj Kumar <manojkumarsivaraj334@gmail.com>
+#          Michael Eickenberg <michael.eickenberg@gmail.com>
 # License: BSD 3 clause
 
 from __future__ import division
@@ -87,7 +88,7 @@ def _check_reg_targets(y_true, y_pred, output_weights):
                          "({0}!={1})".format(y_true.shape[1], y_pred.shape[1]))
 
     n_outputs = y_true.shape[1]
-    output_weights_options = (None, 'uniform')
+    output_weights_options = (None, 'uniform', 'variance')
     if output_weights not in output_weights_options:
         output_weights = safe_asarray(output_weights)
         if n_outputs == 1:
@@ -2189,6 +2190,7 @@ def explained_variance_score(y_true, y_pred, output_weights='uniform'):
         return explained_variance
     return np.average(explained_variance, weights=output_weights)
 
+
 def r2_score(y_true, y_pred, output_weights='uniform'):
     """R^2 (coefficient of determination) regression score function.
 
@@ -2202,7 +2204,7 @@ def r2_score(y_true, y_pred, output_weights='uniform'):
     y_pred : array-like of shape = [n_samples] or [n_samples, n_outputs]
         Estimated target values.
 
-    output_weights : string, ['uniform' (default), None] or
+    output_weights : string, ['uniform' (default), 'variance', None] or
                      array-like of shape = [n_outputs]
 
         This parameter is useful only for multi-output
@@ -2210,14 +2212,21 @@ def r2_score(y_true, y_pred, output_weights='uniform'):
 
         ``'uniform'``:
             A weight of 1/n_outputs is assigned to each dimension while
-            averaging.
+            averaging. This corresponds to 'macro-averaging'.
+
+        ``'variance'``:
+            Weights scaled according to the variance of each target are
+            used. This corresponds to a 'global averaging'. (Explaining
+            high-variance targets is more important than explaining low-
+            variance targets)
 
         ``None``:
-           No averaging is done.
+            No averaging is done. r2 scores for all targets are output 
+            separately.
 
-        Apart from this custom_weights of shape [n_outputs] can be given that
-        assigns user-defined weight to each dimension of the given input.
-
+        ``custom_weights``: Arbitrary weights, in form of an array of shape 
+            (n_outputs,) can be passed to assign more importance to certain
+            targets. If they do not sum to 1, they are normalized to sum 1.
 
     Returns
     -------
@@ -2265,8 +2274,9 @@ def r2_score(y_true, y_pred, output_weights='uniform'):
         raise ValueError("r2_score can only be computed given more than one"
                          " sample.")
 
-    numerator = ((y_true - y_pred) ** 2).sum(dtype=np.float64, axis=0)
-    denominator = ((y_true - y_true.mean(axis=0)) ** 2).sum(dtype=np.float64, axis=0)
+    numerator = ((y_true - y_pred) ** 2).sum(axis=0, dtype=np.float64)
+    denominator = ((y_true - y_true.mean(axis=0)) ** 2
+                   ).sum(axis=0, dtype=np.float64)
 
     # Set an array of ones for the condition that both numerator
     # and denominator are zero.
@@ -2274,7 +2284,7 @@ def r2_score(y_true, y_pred, output_weights='uniform'):
     nonzero_denominator = (denominator != 0.0)
     nonzero_numerator = (numerator != 0.0)
     valid_score = np.logical_and(nonzero_numerator, nonzero_denominator)
-    r2[valid_score] = 1 - numerator[valid_score]/denominator[valid_score]
+    r2[valid_score] = 1 - numerator[valid_score] / denominator[valid_score]
     # Denominator is zero and numerator is non-zero
     # arbitrary set to zero to avoid -inf scores, having a constant
     # y_true is not interesting for scoring a regression anyway
@@ -2282,6 +2292,8 @@ def r2_score(y_true, y_pred, output_weights='uniform'):
         nonzero_numerator)] = 0.0
     if output_weights == 'uniform':
         return np.mean(r2)
+    elif output_weights == 'variance':
+        output_weights = denominator
     elif output_weights is None:
         return r2
     return np.average(r2, weights=output_weights)

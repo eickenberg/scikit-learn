@@ -2059,3 +2059,15 @@ def test_regression_custom_weights():
     assert_almost_equal(maew, 0.475, decimal=3)
     assert_almost_equal(rw, 0.94, decimal=2)
     assert_almost_equal(evsw, 0.94, decimal=2)
+
+
+def test_regression_variance_weights():
+    y_true = np.array([[1, 2], [2.5, -1], [4.5, 3], [5, 7]])
+    y_pred = np.array([[1, 1], [2, -1], [5, 4], [5, 6.5]])
+
+    mean_deviances = ((y_true - y_true.mean(0)) ** 2).sum(0)
+
+    r2_weighted = r2_score(y_true, y_pred, output_weights=mean_deviances)
+    r2_var_weighted = r2_score(y_true, y_pred, output_weights='variance')
+
+    assert_array_almost_equal(r2_weighted, r2_var_weighted)
